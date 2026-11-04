@@ -1,83 +1,101 @@
 # 18KGoldir
 
-A Windows desktop widget built with **Python** and **PyQt6** for displaying the price of 18-karat (18K / 750) gold in Iranian tomans (تومان).
-
-> **Project status:** The GitHub repository was empty when this README was created. This document describes the project based on its stated purpose; implementation details such as the widget layout, refresh interval, packaging, and exact source-field mappings should be updated when the application code is added.
-
-## Overview
-
-18KGoldir is intended to collect 18-karat gold price information from two online sources and present the available data in a compact Windows widget:
-
-1. [RialNerkh — 18 Ayar rate](https://www.rialnerkh.com/rate/18ayar/?lang=fa)
-2. [TIndex](https://tindex.app/en/)
-
-The application should attempt to retrieve data from **both** sources independently. If one source is unavailable or does not expose a usable 18K price, the other source may still provide a value. The UI should identify the source and indicate when data was last updated.
-
-## Features
-
-- Windows desktop widget built with PyQt6.
-- Retrieves 18K gold price information from RialNerkh and TIndex.
-- Displays prices in Iranian tomans (تومان).
-- Supports partial source availability: one successful source should not prevent showing the other source's result.
-- Presents source-specific values separately rather than silently treating potentially different quotes as identical.
-
-The precise fields available from each provider depend on the provider's current website/API response and may change.
+A Windows desktop widget built with **Python** and **PyQt6** that displays the price of one gram of 18-karat (18K / 750) gold in Iranian tomans (تومان).
 
 ## Data sources
 
-| Source | Target | Purpose |
-| --- | --- | --- |
-| RialNerkh | [18 Ayar rate page](https://www.rialnerkh.com/rate/18ayar/?lang=fa) | Retrieve the published 18-karat gold rate, when available. |
-| TIndex | [English website](https://tindex.app/en/) | Check for an available 18K gold quote or related market data. |
+The application is intended to query both providers independently and show each provider's quote when available.
 
-### Data handling notes
+### 1. RialNerkh
 
-- Fetch each provider independently and handle timeouts, network errors, unexpected HTML/API responses, and missing fields.
-- Do not assume both sites publish the same unit or quote basis. Confirm whether a returned value is per gram, per mithqal, or another unit before displaying or comparing it.
-- Normalize units only when the source's unit is known. Convert rial to toman only when the source explicitly provides rial (1 toman = 10 rials).
-- Preserve the provider's original value and unit for diagnostics.
-- Display a timestamp for each successful fetch and clearly mark unavailable or stale data.
-- Treat website content as external data, not executable code. Respect provider terms, rate limits, and robots/access policies; prefer documented APIs if available.
+- Page: https://www.rialnerkh.com/rate/18ayar/?lang=fa
+- The page explicitly identifies the instrument as **one gram of 18-karat gold** (`یک گرم طلا ۱۸ عیار`).
+- The displayed quote is labelled `18AYAR · قیمت به تومان`.
+- Available page data includes the latest rate, price change, opening price, daily high and low, update count, and intraday historical records.
+- The page's own disclaimer says the figures are informational, not a buy/sell recommendation.
+
+### 2. TIndex
+
+- Website: https://tindex.app/en/
+- Gold market page: https://tindex.app/en/indicators/precious-metals/
+- API documentation: https://tindex.app/en/developers/
+- The Gold & coins market page lists **18K Gold**. TIndex's symbol reference identifies its slug as `GOLD-18K` and its unit as **toman/gram**.
+- The documented category endpoint is:
+
+  ```text
+  GET https://tindex.app/api/public/indicators/by-category/precious-metals
+  ```
+
+- The documented Python example uses the `Authorization: Bearer YOUR_TOKEN` header and reads indicator rows from `data.rows`. Filter the response rows for `slug == "GOLD-18K"`.
+- TIndex requires an API token created from a registered account. Its documented free plan currently allows 3 requests per minute and 300 requests per day; observe the response rate-limit headers and `Retry-After` value.
+- TIndex's API documents successful responses as `{ "success": true, "data": ... }`; handle unsuccessful responses and authentication/rate-limit errors explicitly.
+
+**Important:** Both providers currently expose an 18K quote denominated in tomans per gram according to their published pages/documentation. Still validate the actual returned unit and symbol at runtime. Do not silently substitute 24K gold, melted gold, coins, or another unit if the 18K record is missing.
+
+## Intended behavior
+
+- Fetch RialNerkh and TIndex separately. Failure or missing data from one source must not hide a successful result from the other.
+- Display each source's price independently, together with its source name and last-update time.
+- Show a clear unavailable/error/stale state instead of inventing a price or presenting an old value as current.
+- Keep the UI responsive by running network I/O outside the Qt GUI thread.
+- Parse numeric values defensively and preserve the raw provider response/value for troubleshooting.
+- Do not average or reconcile the two quotes unless that behavior is explicitly implemented and labelled.
+
+## Configuration
+
+The TIndex API requires a personal token. Store it outside source control, for example in an environment variable or a local, ignored configuration file. Never commit real tokens, passwords, or other credentials.
+
+Suggested environment variable:
+
+```powershell
+$env:TINDEX_API_TOKEN = "your-token"
+```
+
+RialNerkh page access may be implemented using a documented/public endpoint if available, or carefully maintained page parsing. Prefer stable structured data over scraping rendered HTML. Respect each provider's terms, access rules, and rate limits.
 
 ## Requirements
 
 - Windows
-- Python 3.10 or newer (adjust to the version actually supported by the project)
+- Python 3.10 or newer (adjust to the version actually supported by the implementation)
 - PyQt6
+- An HTTP client such as `requests` or `httpx` (depending on the implementation)
 
-Install the GUI dependency:
+Install the core GUI and HTTP dependencies:
 
 ```powershell
-py -m pip install PyQt6
+py -m pip install PyQt6 requests
 ```
 
-Additional dependencies, if any, should be listed in the project's dependency file (for example, `requirements.txt` or `pyproject.toml`).
+Keep the actual dependency list in `requirements.txt` or `pyproject.toml` once the application code is added.
 
 ## Run
 
-Once the application entry point and dependencies are present, run it from PowerShell. Replace the placeholder with the actual entry-point filename:
+The repository did not contain an application entry point when this README was written. After adding the application code and dependencies, run its actual entry-point script, for example:
 
 ```powershell
-py .\<entry-point>.py
+py .\main.py
 ```
 
-## Configuration
+Update this command if the project's entry point differs.
 
-No configuration interface or environment variables are documented yet. Add source-specific settings (such as request timeout and refresh interval) here when they are implemented. Do not embed API keys or other secrets in source control.
+## Development notes
 
-## Development
+Suggested separation of responsibilities:
 
-Suggested implementation boundaries:
-
-- **Source adapters:** one adapter per provider, each returning a normalized result or a structured error.
-- **Normalization:** explicit unit/currency conversion with tests; never infer a unit from the numeric value alone.
-- **UI:** keep network requests off the Qt GUI thread (for example, use a worker thread or asynchronous task) so the widget remains responsive.
-- **Resilience:** retain the last successful value while showing its age and the current fetch status.
-- **Testing:** cover parsing, missing data, malformed responses, timeouts, and one-source-only availability with mocked responses.
+- **RialNerkh adapter:** fetch and parse the 18AYAR page/data, validating that the result is the per-gram 18K quote in toman.
+- **TIndex adapter:** call the documented precious-metals endpoint with the bearer token, then select the `GOLD-18K` row.
+- **Normalization:** produce a common internal representation containing source, symbol, price, currency, unit, source timestamp, fetch timestamp, and status. Reject unknown units rather than guessing.
+- **Qt UI:** use a worker thread (for example, `QThread`/worker object) for network operations; update widgets only on the GUI thread.
+- **Resilience:** handle timeouts, DNS/network errors, HTTP errors, malformed JSON/HTML, missing symbols, and rate limits. Retain last-known values only when clearly marked with their age.
+- **Tests:** mock provider responses and cover valid prices, missing `GOLD-18K`, wrong units, malformed payloads, timeouts, and one-provider-only success.
 
 ## Disclaimer
 
-Displayed prices are informational quotes from third-party sources and may be delayed, unavailable, or different from executable market prices. Verify prices and units with the original provider before making financial decisions. This application is not financial advice.
+Prices are third-party informational quotes. They may be delayed, unavailable, or different from executable market prices. Verify the current price and unit with the provider before making a transaction. This application is not financial advice.
+
+## Project status
+
+The repository was empty when this README was first added. This document describes the requested application and verified public data-source interfaces; it does not claim that the widget, fetchers, packaging, or tests have already been implemented.
 
 ## License
 
