@@ -68,6 +68,27 @@ py -m pip install PyQt6 requests
 
 Keep the actual dependency list in `requirements.txt` or `pyproject.toml` once the application code is added.
 
+## RialNerkh historical table collector
+
+The first data-collection module is `rialnerkh_history.py`. It requests the RialNerkh 18AYAR date page once per calendar day, extracts all columns from the supplied history table's `thead` and all data rows from `tbody`, and combines the results into one CSV.
+
+By default, it walks backward from today in the Tehran timezone to **2026-08-01**, pausing for a random **4–8 seconds** between daily requests. Output is saved under `.\\data` with a timestamped filename such as `20261104_153000.csv`. CSV uses UTF-8 with BOM for Excel. Persian/Arabic digits are normalized to ASCII. Each row also records the requested date, source URL, and fetch timestamp.
+
+Install and run on Windows:
+
+```powershell
+py -m pip install -r requirements.txt
+py .\rialnerkh_history.py
+```
+
+Optional range and delay:
+
+```powershell
+py .\rialnerkh_history.py --start-date 2026-08-01 --end-date 2026-11-04 --min-delay 5 --max-delay 10
+```
+
+The collector uses a descriptive User-Agent, no proxies, and no access-control bypass. It honours `Retry-After` for HTTP 429/503 and stops on HTTP 403 or repeated rate limiting. Random delay is polite pacing, not a guarantee against blocking. If the site's HTML changes, update `TABLE_SELECTOR`. This module collects the history table only; it does not yet implement the PyQt6 widget.
+
 ## Run
 
 The repository did not contain an application entry point when this README was written. After adding the application code and dependencies, run its actual entry-point script, for example:
