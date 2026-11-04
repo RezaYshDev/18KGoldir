@@ -99,6 +99,15 @@ def fetch_day(session: requests.Session, day: date) -> list[dict[str, str]]:
             time.sleep(wait)
             continue
 
+        if response.status_code in (500, 502, 504):
+            if attempt == MAX_ATTEMPTS:
+                response.raise_for_status()
+            wait = random.uniform(5.0, 15.0) * attempt
+            log.warning("HTTP %s for %s; retrying in %.1fs",
+                        response.status_code, day, wait)
+            time.sleep(wait)
+            continue
+
         if response.status_code in (403,):
             raise RuntimeError(
                 f"Access denied (HTTP 403) for {day}. Stopping; do not attempt "
